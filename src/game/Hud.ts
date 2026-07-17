@@ -3,102 +3,150 @@ import { tileColor } from './Map'
 import type { Player } from './Player'
 import type { MapDef } from './Map'
 
+const FONT = '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif'
+const DISPLAY = '"Syne", -apple-system, BlinkMacSystemFont, sans-serif'
+
 export class Hud {
-  draw(ctx: CanvasRenderingContext2D, player: Player, _time: number, map?: MapDef, deliveriesLeft = 0) {
-    // top bar
-    ctx.fillStyle = palette.black
-    ctx.fillRect(0, 0, 960, 56)
-    ctx.fillStyle = palette.cream
-    ctx.fillRect(0, 56, 960, 4)
+  anim = 0
 
-    // Score
-    ctx.fillStyle = palette.cream
-    ctx.font = '12px "Press Start 2P"'
-    ctx.fillText('SCORE', 16, 18)
-    ctx.fillStyle = palette.lightGreen
-    ctx.font = '18px "Press Start 2P"'
-    ctx.fillText(String(player.score).padStart(6, '0'), 16, 42)
+  tick() {
+    this.anim++
+  }
 
-    // Health
-    ctx.fillStyle = palette.cream
-    ctx.font = '10px "Press Start 2P"'
-    ctx.fillText('HP', 220, 16)
-    for (let i = 0; i < player.maxHealth; i++) {
-      this.drawHeart(ctx, 216 + i * 28, 24, i < player.health ? palette.red : '#444')
-    }
-
-    // Bags
-    ctx.fillStyle = palette.cream
-    ctx.font = '10px "Press Start 2P"'
-    ctx.fillText('BAGS', 330, 16)
-    ctx.fillStyle = palette.brown
-    ctx.fillRect(330, 24, 16, 20)
-    ctx.fillStyle = palette.cream
-    ctx.fillRect(332, 26, 12, 12)
-    ctx.fillStyle = palette.cream
-    ctx.font = '14px "Press Start 2P"'
-    ctx.fillText(`${player.bags}/${player.maxBags}`, 352, 40)
-
-    // Tokens
-    ctx.fillStyle = palette.cream
-    ctx.font = '10px "Press Start 2P"'
-    ctx.fillText('TOKENS', 450, 16)
-    this.drawToken(ctx, 460, 32)
-    ctx.fillStyle = palette.gold
-    ctx.font = '16px "Press Start 2P"'
-    ctx.fillText('x ' + String(player.tokens).padStart(2, '0'), 488, 40)
-
-    // Time/Energy
-    ctx.fillStyle = palette.cream
-    ctx.font = '10px "Press Start 2P"'
-    ctx.fillText('ENERGY', 610, 16)
-    // lightning
-    ctx.fillStyle = palette.gold
+  private roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+  ) {
+    const rr = Math.min(r, w / 2, h / 2)
     ctx.beginPath()
-    ctx.moveTo(616, 26)
-    ctx.lineTo(624, 26)
-    ctx.lineTo(618, 34)
-    ctx.lineTo(626, 34)
-    ctx.lineTo(616, 46)
-    ctx.lineTo(620, 38)
-    ctx.lineTo(612, 38)
+    ctx.moveTo(x + rr, y)
+    ctx.arcTo(x + w, y, x + w, y + h, rr)
+    ctx.arcTo(x + w, y + h, x, y + h, rr)
+    ctx.arcTo(x, y + h, x, y, rr)
+    ctx.arcTo(x, y, x + w, y, rr)
     ctx.closePath()
+  }
+
+  private glass(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r = 16,
+    fill = 'rgba(255,255,255,0.72)',
+  ) {
+    ctx.save()
+    this.roundRect(ctx, x, y, w, h, r)
+    ctx.fillStyle = fill
     ctx.fill()
-    const segments = 12
-    const segW = 14
-    const segGap = 2
-    const full = Math.ceil((player.energy / player.maxEnergy) * segments)
-    for (let i = 0; i < segments; i++) {
-      ctx.fillStyle = i < full ? palette.lightGreen : '#444'
-      ctx.fillRect(640 + i * (segW + segGap), 28, segW, 14)
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    // soft inner top highlight
+    ctx.beginPath()
+    this.roundRect(ctx, x + 1, y + 1, w - 2, h * 0.35, r)
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fill()
+    ctx.restore()
+  }
+
+  draw(
+    ctx: CanvasRenderingContext2D,
+    player: Player,
+    _time: number,
+    map?: MapDef,
+    deliveriesLeft = 0,
+    combo = 0,
+    nearest?: { x: number; y: number } | null,
+  ) {
+    // frosted top bar
+    this.glass(ctx, 12, 12, 936, 52, 18, 'rgba(20,28,22,0.72)')
+
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#fff'
+    ctx.font = `600 11px ${FONT}`
+    ctx.fillText('SCORE', 28, 32)
+    ctx.font = `700 22px ${DISPLAY}`
+    ctx.fillStyle = '#7DDA82'
+    ctx.fillText(String(player.score).padStart(6, '0'), 28, 52)
+
+    // HP pills
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.font = `600 11px ${FONT}`
+    ctx.fillText('HEALTH', 180, 32)
+    for (let i = 0; i < player.maxHealth; i++) {
+      this.drawHeart(ctx, 176 + i * 26, 36, i < player.health ? '#FF453A' : 'rgba(255,255,255,0.2)')
     }
 
-    // Lives
-    ctx.fillStyle = palette.cream
-    ctx.font = '10px "Press Start 2P"'
-    ctx.fillText('LIVES', 850, 16)
-    this.drawSkull(ctx, 860, 28)
-    ctx.fillStyle = palette.cream
-    ctx.font = '16px "Press Start 2P"'
-    ctx.fillText('x ' + String(player.lives).padStart(2, '0'), 884, 40)
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.fillText('BAGS', 290, 32)
+    ctx.fillStyle = '#fff'
+    ctx.font = `700 18px ${DISPLAY}`
+    ctx.fillText(`${player.bags}`, 290, 52)
 
-    // Map info / deliveries
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.font = `600 11px ${FONT}`
+    ctx.fillText('TOKENS', 360, 32)
+    ctx.fillStyle = '#FFD60A'
+    ctx.font = `700 18px ${DISPLAY}`
+    ctx.fillText(String(player.tokens), 360, 52)
+
+    // energy bar — iOS style
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.font = `600 11px ${FONT}`
+    ctx.fillText('ENERGY', 460, 32)
+    this.roundRect(ctx, 460, 38, 200, 12, 6)
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'
+    ctx.fill()
+    const ew = Math.max(0, (player.energy / player.maxEnergy) * 200)
+    this.roundRect(ctx, 460, 38, ew, 12, 6)
+    ctx.fillStyle = '#30D158'
+    ctx.fill()
+
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    ctx.font = `600 11px ${FONT}`
+    ctx.fillText('LIVES', 700, 32)
+    ctx.fillStyle = '#fff'
+    ctx.font = `700 18px ${DISPLAY}`
+    ctx.fillText(String(player.lives), 700, 52)
+
+    if (combo > 1) {
+      ctx.fillStyle = '#FF9F0A'
+      ctx.font = `800 20px ${DISPLAY}`
+      ctx.textAlign = 'right'
+      ctx.fillText(`${combo}x COMBO`, 930, 48)
+      ctx.textAlign = 'left'
+    }
+
     if (map) {
-      ctx.fillStyle = palette.black
-      ctx.fillRect(16, 64, 220, 32)
-      ctx.fillStyle = palette.cream
-      ctx.font = '10px "Press Start 2P"'
-      ctx.fillText(map.name.toUpperCase(), 26, 78)
-      ctx.fillStyle = palette.gold
-      ctx.fillText(`DELIVERIES ${map.deliveries.length - deliveriesLeft}/${map.deliveries.length}`, 26, 90)
+      this.glass(ctx, 12, 74, 260, 44, 14, 'rgba(20,28,22,0.65)')
+      ctx.fillStyle = '#fff'
+      ctx.font = `700 14px ${DISPLAY}`
+      ctx.fillText(map.name, 28, 94)
+      const done = map.deliveries.length - deliveriesLeft
+      ctx.fillStyle = '#FFD60A'
+      ctx.font = `600 12px ${FONT}`
+      ctx.fillText(`${done} / ${map.deliveries.length} deliveries`, 28, 110)
     }
 
-    // controls
-    ctx.fillStyle = 'rgba(0,0,0,0.65)'
-    ctx.fillRect(16, 500, 420, 26)
-    ctx.fillStyle = palette.cream
-    ctx.font = '9px "Press Start 2P"'
-    ctx.fillText('WASD/ARROWS ride  SPACE ollie  F ray gun  D throw bag', 26, 517)
+    // waypoint chip
+    if (nearest) {
+      this.glass(ctx, 720, 74, 228, 36, 14, 'rgba(20,28,22,0.65)')
+      ctx.fillStyle = '#7DDA82'
+      ctx.font = `600 12px ${FONT}`
+      ctx.fillText('Next drop → ride close, press D', 736, 96)
+    }
+
+    // bottom hint — quiet
+    this.glass(ctx, 12, 496, 520, 32, 12, 'rgba(20,28,22,0.55)')
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'
+    ctx.font = `500 12px ${FONT}`
+    ctx.fillText('WASD  move   Space  ollie   F  shoot   D  deliver', 28, 516)
   }
 
   drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
@@ -112,149 +160,212 @@ export class Hud {
     ctx.fill()
   }
 
-  drawToken(ctx: CanvasRenderingContext2D, x: number, y: number) {
-    ctx.fillStyle = palette.gold
-    ctx.beginPath()
-    ctx.arc(x + 8, y + 8, 8, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = palette.black
-    ctx.beginPath()
-    ctx.arc(x + 8, y + 7, 4, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  drawSkull(ctx: CanvasRenderingContext2D, x: number, y: number) {
-    ctx.fillStyle = palette.cream
-    ctx.beginPath()
-    ctx.arc(x + 8, y + 8, 8, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = palette.black
-    ctx.beginPath()
-    ctx.arc(x + 5, y + 7, 2, 0, Math.PI * 2)
-    ctx.arc(x + 11, y + 7, 2, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillRect(x + 4, y + 12, 8, 3)
-  }
-
   drawTitle(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = palette.cream
+    // soft vertical gradient — no checker chaos
+    const g = ctx.createLinearGradient(0, 0, 0, 540)
+    g.addColorStop(0, '#F7F1E3')
+    g.addColorStop(0.55, '#E8F0E4')
+    g.addColorStop(1, '#2E6E3E')
+    ctx.fillStyle = g
     ctx.fillRect(0, 0, 960, 540)
 
-    // checkered border
-    ctx.fillStyle = palette.black
-    for (let i = 0; i < 960; i += 32) {
-      ctx.fillRect(i, 0, 16, 16)
-      ctx.fillRect(i + 16, 16, 16, 16)
-      ctx.fillRect(i, 524, 16, 16)
-      ctx.fillRect(i + 16, 508, 16, 16)
-    }
-
-    ctx.fillStyle = palette.black
-    ctx.font = '72px "Rubik Mono One"'
-    ctx.textAlign = 'center'
-    ctx.fillText('SKULL', 480, 150)
-    ctx.fillStyle = palette.darkGreen
-    ctx.fillText('OR DIE', 480, 230)
-
-    ctx.fillStyle = palette.black
-    ctx.font = '16px "Press Start 2P"'
-    ctx.fillText('PAPERBOY MEETS SKATE OR DIE', 480, 290)
-    ctx.font = '14px "Press Start 2P"'
-    ctx.fillText('DELIVER CHAOS. COLLECT TOKENS. OWN THE STREETS.', 480, 320)
-
-    ctx.font = '14px "Press Start 2P"'
-    ctx.fillText('PRESS SPACE TO ROLL', 480, 390)
-
-    ctx.fillStyle = palette.lightGreen
+    // ambient orbs
+    ctx.fillStyle = 'rgba(107,175,110,0.25)'
     ctx.beginPath()
-    ctx.arc(480, 450, 50, 0, Math.PI * 2)
+    ctx.arc(160, 120, 120, 0, Math.PI * 2)
     ctx.fill()
-    ctx.lineWidth = 5
-    ctx.strokeStyle = palette.black
-    ctx.stroke()
-    ctx.fillStyle = palette.black
-    ctx.font = '12px "Press Start 2P"'
-    ctx.fillText('8-BIT', 480, 442)
-    ctx.fillText('PUNK', 480, 460)
+    ctx.fillStyle = 'rgba(255,242,179,0.35)'
+    ctx.beginPath()
+    ctx.arc(820, 400, 160, 0, Math.PI * 2)
+    ctx.fill()
+
+    // center glass card
+    this.glass(ctx, 180, 80, 600, 380, 28, 'rgba(255,255,255,0.55)')
+
+    ctx.textAlign = 'center'
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'
+    ctx.font = `600 13px ${FONT}`
+    ctx.fillText('SKATE · DELIVER · DESTROY', 480, 130)
+
+    ctx.fillStyle = '#111'
+    ctx.font = `800 64px ${DISPLAY}`
+    ctx.fillText('SKULL', 480, 210)
+    ctx.fillStyle = palette.darkGreen
+    ctx.fillText('OR DIE', 480, 280)
+
+    ctx.fillStyle = 'rgba(0,0,0,0.65)'
+    ctx.font = `500 16px ${FONT}`
+    ctx.fillText('Paperboy meets Skate or Die.', 480, 320)
+    ctx.fillText('Deliver the Daily. Own the streets.', 480, 344)
+
+    // primary CTA — Apple style capsule
+    const pulse = 0.5 + Math.sin(this.anim * 0.08) * 0.08
+    this.roundRect(ctx, 330, 380, 300, 52, 26)
+    ctx.fillStyle = `rgba(46,110,62,${0.92 + pulse * 0.05})`
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.font = `700 17px ${FONT}`
+    ctx.fillText('Press Space to Play', 480, 412)
+
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'
+    ctx.font = `500 12px ${FONT}`
+    ctx.fillText('or tap anywhere', 480, 440)
 
     ctx.textAlign = 'left'
   }
 
   drawMapSelect(ctx: CanvasRenderingContext2D, maps: MapDef[], selected: number) {
-    ctx.fillStyle = palette.cream
+    const g = ctx.createLinearGradient(0, 0, 0, 540)
+    g.addColorStop(0, '#F4F6F5')
+    g.addColorStop(1, '#DDE8DF')
+    ctx.fillStyle = g
     ctx.fillRect(0, 0, 960, 540)
 
-    ctx.fillStyle = palette.black
-    ctx.font = '36px "Rubik Mono One"'
     ctx.textAlign = 'center'
-    ctx.fillText('PICK A ROUTE', 480, 80)
+    ctx.fillStyle = '#111'
+    ctx.font = `800 36px ${DISPLAY}`
+    ctx.fillText('Choose a Route', 480, 64)
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.font = `500 14px ${FONT}`
+    ctx.fillText('Arrow keys to browse · Space to ride', 480, 90)
+
+    const cardW = 260
+    const cardH = 320
+    const gap = 28
+    const total = maps.length * cardW + (maps.length - 1) * gap
+    const startX = (960 - total) / 2
 
     maps.forEach((m, i) => {
-      const x = 180 + i * 260
-      const y = 180
-      const w = 220
-      const h = 240
+      const x = startX + i * (cardW + gap)
+      const y = 120
       const isSelected = i === selected
+      const lift = isSelected ? -6 : 0
 
-      ctx.fillStyle = isSelected ? palette.lightGreen : palette.white
-      ctx.fillRect(x, y, w, h)
-      ctx.lineWidth = isSelected ? 6 : 3
-      ctx.strokeStyle = palette.black
-      ctx.strokeRect(x, y, w, h)
+      // shadow
+      ctx.save()
+      ctx.shadowColor = isSelected ? 'rgba(46,110,62,0.35)' : 'rgba(0,0,0,0.12)'
+      ctx.shadowBlur = isSelected ? 28 : 16
+      ctx.shadowOffsetY = 10
+      this.roundRect(ctx, x, y + lift, cardW, cardH, 22)
+      ctx.fillStyle = isSelected ? '#FFFFFF' : 'rgba(255,255,255,0.85)'
+      ctx.fill()
+      ctx.restore()
 
-      // mini map preview
-      const px = x + w / 2
-      const py = y + 110
-      const scale = 8
-      for (let gy = 0; gy < m.height; gy++) {
-        for (let gx = 0; gx < m.width; gx++) {
-          const t = m.tiles[gy][gx]
-          const sx = px + (gx - gy) * (scale / 2)
-          const sy = py + (gx + gy) * (scale / 4)
-          ctx.fillStyle = tileColor(t)
-          ctx.fillRect(sx - scale / 4, sy - scale / 4, scale / 2, scale / 2)
+      if (isSelected) {
+        this.roundRect(ctx, x, y + lift, cardW, cardH, 22)
+        ctx.strokeStyle = palette.darkGreen
+        ctx.lineWidth = 3
+        ctx.stroke()
+      }
+
+      // TOP-DOWN mini map (not isometric — no slant)
+      const mapPad = 18
+      const mapBox = cardW - mapPad * 2
+      const mapY = y + lift + 20
+      this.roundRect(ctx, x + mapPad, mapY, mapBox, 150, 14)
+      ctx.fillStyle = '#1a2e22'
+      ctx.fill()
+
+      const cell = mapBox / Math.max(m.width, m.height)
+      const ox = x + mapPad + (mapBox - m.width * cell) / 2
+      const oy = mapY + (150 - m.height * cell) / 2
+      for (let gy = 0; gy < m.height; gy += 2) {
+        for (let gx = 0; gx < m.width; gx += 2) {
+          ctx.fillStyle = tileColor(m.tiles[gy][gx])
+          ctx.fillRect(ox + gx * cell, oy + gy * cell, cell * 2 + 0.5, cell * 2 + 0.5)
         }
       }
-      // route pins
-      ctx.fillStyle = palette.red
+      // start / goal
+      ctx.fillStyle = '#FF453A'
       ctx.beginPath()
-      ctx.arc(px + (m.start.x - m.start.y) * (scale / 2), py + (m.start.x + m.start.y) * (scale / 4), 4, 0, Math.PI * 2)
+      ctx.arc(ox + m.start.x * cell, oy + m.start.y * cell, 4, 0, Math.PI * 2)
       ctx.fill()
-      ctx.fillStyle = palette.darkGreen
+      ctx.fillStyle = '#30D158'
       ctx.beginPath()
-      ctx.arc(px + (m.goal.x - m.goal.y) * (scale / 2), py + (m.goal.x + m.goal.y) * (scale / 4), 4, 0, Math.PI * 2)
+      ctx.arc(ox + m.goal.x * cell, oy + m.goal.y * cell, 4, 0, Math.PI * 2)
       ctx.fill()
 
-      ctx.fillStyle = palette.black
-      ctx.font = '16px "Rubik Mono One"'
-      ctx.fillText(m.name.toUpperCase(), x + w / 2, y + 188)
-      ctx.font = '8px "Press Start 2P"'
-      ctx.fillText(m.blurb, x + w / 2, y + 206)
-      ctx.fillText(`${m.width}x${m.height}  ${m.deliveries.length} drops`, x + w / 2, y + 220)
-      ctx.fillText(`${m.halfpipes.length} halfpipes  ${m.tokens.length} tokens`, x + w / 2, y + 234)
+      ctx.fillStyle = '#111'
+      ctx.font = `800 22px ${DISPLAY}`
+      ctx.fillText(m.name, x + cardW / 2, y + lift + 200)
+
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.font = `500 12px ${FONT}`
+      ctx.fillText(m.blurb, x + cardW / 2, y + lift + 224)
+
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'
+      ctx.font = `600 13px ${FONT}`
+      ctx.fillText(`${m.deliveries.length} drops · ${m.halfpipes.length} pipes`, x + cardW / 2, y + lift + 252)
+
+      if (isSelected) {
+        this.roundRect(ctx, x + 40, y + lift + 270, cardW - 80, 36, 18)
+        ctx.fillStyle = palette.darkGreen
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.font = `700 14px ${FONT}`
+        ctx.fillText('Ride', x + cardW / 2, y + lift + 293)
+      }
     })
 
-    ctx.font = '12px "Press Start 2P"'
-    ctx.fillStyle = palette.black
-    ctx.fillText('LEFT / RIGHT to select  SPACE to ride', 480, 480)
     ctx.textAlign = 'left'
   }
 
   drawGameOver(ctx: CanvasRenderingContext2D, player: Player, won: boolean) {
-    ctx.fillStyle = 'rgba(0,0,0,0.72)'
+    ctx.fillStyle = 'rgba(10,14,12,0.55)'
     ctx.fillRect(0, 0, 960, 540)
 
-    ctx.fillStyle = won ? palette.lightGreen : palette.red
-    ctx.font = '48px "Rubik Mono One"'
+    this.glass(ctx, 230, 140, 500, 260, 28, 'rgba(255,255,255,0.82)')
+
     ctx.textAlign = 'center'
-    ctx.fillText(won ? 'ROUTE COMPLETE' : 'WIPED OUT', 480, 220)
+    ctx.fillStyle = won ? palette.darkGreen : '#FF453A'
+    ctx.font = `800 40px ${DISPLAY}`
+    ctx.fillText(won ? 'Route Clear' : 'Wiped Out', 480, 210)
 
-    ctx.fillStyle = palette.cream
-    ctx.font = '20px "Press Start 2P"'
-    ctx.fillText('SCORE ' + String(player.score).padStart(6, '0'), 480, 290)
+    ctx.fillStyle = '#111'
+    ctx.font = `700 28px ${DISPLAY}`
+    ctx.fillText(String(player.score).padStart(6, '0'), 480, 260)
 
-    ctx.font = '14px "Press Start 2P"'
-    ctx.fillText('PRESS SPACE TO RIDE AGAIN', 480, 360)
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.font = `500 14px ${FONT}`
+    ctx.fillText(won ? 'All bags dropped. Streets owned.' : 'Energy gone. Try another route.', 480, 290)
+
+    this.roundRect(ctx, 355, 320, 250, 44, 22)
+    ctx.fillStyle = palette.darkGreen
+    ctx.fill()
+    ctx.fillStyle = '#fff'
+    ctx.font = `700 15px ${FONT}`
+    ctx.fillText('Press Space', 480, 347)
+
     ctx.textAlign = 'left'
+  }
+
+  /** Draw a floating arrow toward nearest delivery */
+  drawWaypoint(
+    ctx: CanvasRenderingContext2D,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ) {
+    const dx = toX - fromX
+    const dy = toY - fromY
+    const dist = Math.hypot(dx, dy)
+    if (dist < 40) return
+    const ang = Math.atan2(dy, dx)
+    const ax = fromX + Math.cos(ang) * 36
+    const ay = fromY + Math.sin(ang) * 36
+
+    ctx.save()
+    ctx.translate(ax, ay)
+    ctx.rotate(ang)
+    ctx.fillStyle = 'rgba(255,214,10,0.9)'
+    ctx.beginPath()
+    ctx.moveTo(14, 0)
+    ctx.lineTo(-8, 8)
+    ctx.lineTo(-4, 0)
+    ctx.lineTo(-8, -8)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
   }
 }

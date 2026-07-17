@@ -12,8 +12,8 @@ export class Player {
   width = 28
   height = 48
 
-  speed = 0.18
-  maxSpeed = 0.32
+  speed = 0.22
+  maxSpeed = 0.42
   angle = 0 // moving angle
   vx = 0
   vy = 0
@@ -51,8 +51,12 @@ export class Player {
 
   move(dx: number, dy: number) {
     if (dx === 0 && dy === 0) return
-    this.vx += dx * 0.04
-    this.vy += dy * 0.04
+    // normalize diagonal so diagonals aren't turbo
+    const len = Math.hypot(dx, dy) || 1
+    dx /= len
+    dy /= len
+    this.vx += dx * 0.055
+    this.vy += dy * 0.055
     const mag = Math.hypot(this.vx, this.vy)
     if (mag > this.maxSpeed) {
       this.vx = (this.vx / mag) * this.maxSpeed
@@ -62,9 +66,9 @@ export class Player {
   }
 
   update() {
-    // friction
-    this.vx *= 0.88
-    this.vy *= 0.88
+    // snappier friction — still drifts like a board
+    this.vx *= 0.9
+    this.vy *= 0.9
 
     this.gx += this.vx
     this.gy += this.vy

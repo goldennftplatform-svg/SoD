@@ -24,6 +24,8 @@ export class Game {
   camX = 480
   camY = 270
   screenShake = 0
+  combo = 0
+  comboTimer = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -50,6 +52,8 @@ export class Game {
           this.state = 'mapselect'
         } else if (this.state === 'mapselect') {
           this.start(this.maps[this.selectedMap])
+        } else if (this.state === 'playing') {
+          this.player.jump()
         } else if (this.state === 'gameover' || this.state === 'won') {
           this.state = 'mapselect'
         }
@@ -89,6 +93,25 @@ export class Game {
     this.particles = new ParticleSystem()
     this.state = 'playing'
     this.time = 0
+    this.combo = 0
+    this.comboTimer = 0
+  }
+
+  nearestDelivery() {
+    let best: { x: number; y: number; dist: number } | null = null
+    for (const e of this.world.entities) {
+      if (!e.alive || e.type !== 'delivery') continue
+      const dist = Math.hypot(this.player.gx - e.gx, this.player.gy - e.gy)
+      if (!best || dist < best.dist) best = { x: e.gx, y: e.gy, dist }
+    }
+    return best
+  }
+
+  bumpCombo(points: number) {
+    this.combo = Math.min(12, this.combo + 1)
+    this.comboTimer = 180
+    const mult = Math.max(1, this.combo)
+    this.player.score += Math.floor(points * (mult - 1))
   }
 
   shootRay() {
@@ -109,14 +132,46 @@ export class Game {
 
   throwBag() {
     if (!this.player.canDeliver() || this.player.bags <= 0) return
+
+    // auto-assist: if near a mailbox, land the delivery instantly
+    const near = this.nearestDelivery()
+    if (near && near.dist < 2.4) {
+      let box = null as (typeof this.world.entities)[number] | null
+      let best = 999
+      for (const e of this.world.entities) {
+        if (!e.alive || e.type !== 'delivery') continue
+        const d = Math.hypot(e.gx - near.x, e.gy - near.y)
+        if (d < best) {
+          best = d
+          box = e
+        }
+      }
+      if (box) {
+        this.player.deliver()
+        this.player.cooldownDeliver = 20
+        box.alive = false
+        box.delivered = true
+        this.bumpCombo(350)
+        this.player.score += 350
+        this.player.tokens += 3
+        const { x, y } = isoToScreen(box.gx, box.gy, this.camX, this.camY)
+        this.particles.emitDelivery(x, y - 20)
+        return
+      }
+    }
+
     this.player.deliver()
+    const aim = near && near.dist < 8 ? near : null
+    const tx = aim ? aim.x - this.player.gx : this.player.facing > 0 ? 0.18 : -0.18
+    const ty = aim ? aim.y - this.player.gy : 0.06
+    const mag = Math.hypot(tx, ty) || 1
     this.world.addProjectile(
       this.player.gx,
       this.player.gy,
       this.player.z + 0.4,
-      this.player.facing > 0 ? 0.18 : -0.18,
-      0.06,
-      0.08,
+      (tx / mag) * 0.22,
+      (ty / mag) * 0.22,
+      0.1,
       true,
     )
   }
@@ -133,9 +188,14 @@ export class Game {
 
   update(_dt: number) {
     this.particles.update()
+    this.hud.tick()
 
     if (this.state === 'playing') {
       this.time++
+      if (this.comboTimer > 0) {
+        this.comboTimer--
+        if (this.comboTimer <= 0) this.combo = 0
+      }
 
       // input movement
       let dx = 0
@@ -222,15 +282,17 @@ export class Game {
               p.alive = false
               e.alive = false
               e.delivered = true
+              this.bumpCombo(350)
               this.player.score += 350
               this.player.tokens += 3
-              const { x, y } = isoToScreen(e.gx, e.gy, 0, 0)
+              const { x, y } = isoToScreen(e.gx, e.gy, this.camX, this.camY)
               this.particles.emitDelivery(x, y - 20)
             } else if (!p.isDelivery && (e.type === 'enemy' || e.type === 'hazard')) {
               p.alive = false
               e.alive = false
+              this.bumpCombo(200)
               this.player.score += 200
-              const { x, y } = isoToScreen(e.gx, e.gy, 0, 0)
+              const { x, y } = isoToScreen(e.gx, e.gy, this.camX, this.camY)
               this.particles.emitSpark(x, y - 20, 10)
             }
           }
@@ -245,7 +307,8 @@ export class Game {
           if (e.type === 'token') {
             e.alive = false
             this.player.collectToken()
-            const { x, y } = isoToScreen(e.gx, e.gy, 0, 0)
+            this.bumpCombo(50)
+            const { x, y } = isoToScreen(e.gx, e.gy, this.camX, this.camY)
             this.particles.emitSpark(x, y - 20, 8)
           } else if (e.type === 'heart') {
             e.alive = false
@@ -253,9 +316,9 @@ export class Game {
           } else if (e.type === 'hazard' || e.type === 'enemy') {
             if (this.player.takeDamage()) {
               this.screenShake = 10
+              this.combo = 0
+              this.comboTimer = 0
             }
-          } else if (e.type === 'delivery') {
-            // must throw a bag to deliver; touching does nothing
           }
         }
       })
@@ -292,11 +355,20 @@ export class Game {
       this.hud.drawMapSelect(this.ctx, this.maps, this.selectedMap)
     } else if (this.state === 'playing' || this.state === 'gameover' || this.state === 'won') {
       const { x, y } = isoToScreen(this.player.gx, this.player.gy, 0, 0)
+      const px = this.camX + x
+      const py = this.camY + y
       this.world.draw(this.ctx, this.camX, this.camY, this.player.gx, this.player.gy)
-      this.player.draw(this.ctx, this.camX + x, this.camY + y)
+      this.player.draw(this.ctx, px, py)
       this.particles.draw(this.ctx)
+
+      const near = this.nearestDelivery()
+      if (this.state === 'playing' && near) {
+        const target = isoToScreen(near.x, near.y, this.camX, this.camY)
+        this.hud.drawWaypoint(this.ctx, px, py - 20, target.x, target.y)
+      }
+
       const deliveriesLeft = this.world.entities.filter((e) => e.type === 'delivery' && e.alive).length
-      this.hud.draw(this.ctx, this.player, this.time, this.world.map, deliveriesLeft)
+      this.hud.draw(this.ctx, this.player, this.time, this.world.map, deliveriesLeft, this.combo, near)
     }
 
     if (this.state === 'gameover') {
