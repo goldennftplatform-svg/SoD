@@ -1,0 +1,41 @@
+{
+  "name": "Skull or Die Kit",
+  "version": "0.1.0",
+  "hero": {
+    "glb": "skull_pepe_hero.glb",
+    "preview": "skull_pepe_hero.png",
+    "parts": [
+      "skull",
+      "brain",
+      "daisy_crown",
+      "harness",
+      "delivery_bag",
+      "skateboard",
+      "ray_gun",
+      "green_glove"
+    ]
+  },
+  "fullKit": {
+    "glb": "skull_pepe_kit.glb",
+    "blend": "skull_or_die.blend",
+    "props": [
+      "mailbox",
+      "ramp",
+      "hazard_barrel",
+      "caution_sign",
+      "token",
+      "1up_heart"
+    ]
+  },
+  "palette": {
+    "cream": "#FFF2B3",
+    "lightGreen": "#6BAF6E",
+    "darkGreen": "#2E6E3E",
+    "brown": "#B56A4D",
+    "grey": "#8E8E8E",
+    "red": "#E5392D",
+    "gold": "#D4A017",
+    "black": "#000000",
+    "white": "#FFFFFF"
+  }
+}
