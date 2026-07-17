@@ -1,6 +1,6 @@
 import { palette } from './brand'
 import { drawIsoTile, drawIsoCube, isoToScreen } from './iso'
-import { tileColor, type MapDef, type TileType } from './Map'
+import { tileColor, tileHeight, type MapDef, type TileType } from './Map'
 
 export interface WorldEntity {
   type: 'delivery' | 'token' | 'heart' | 'hazard' | 'ramp' | 'enemy' | 'boss'
@@ -79,32 +79,47 @@ export class World {
     return this.map.tiles[gy][gx]
   }
 
-  draw(ctx: CanvasRenderingContext2D, camX: number, camY: number) {
+  draw(ctx: CanvasRenderingContext2D, camX: number, camY: number, focusX = 0, focusY = 0) {
     // background
-    ctx.fillStyle = '#2c4a36'
+    ctx.fillStyle = '#1e3326'
     ctx.fillRect(0, 0, this.width, this.height)
 
-    // draw tiles in back-to-front order
-    for (let y = 0; y < this.map.height; y++) {
-      for (let x = 0; x < this.map.width; x++) {
-        const t = this.map.tiles[y][x]
-        if (t === 'grass' || t === 'dirt') continue
-        drawIsoTile(ctx, x, y, camX, camY, tileColor(t), t === 'ramp' ? 8 : t === 'building' ? 24 : 0)
+    // cull around player focus — big maps stay fast
+    const r = 18
+    const x0 = Math.max(0, Math.floor(focusX) - r)
+    const x1 = Math.min(this.map.width - 1, Math.ceil(focusX) + r)
+    const y0 = Math.max(0, Math.floor(focusY) - r)
+    const y1 = Math.min(this.map.height - 1, Math.ceil(focusY) + r)
 
-        // entities on this tile
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const t = this.map.tiles[y][x]
+        const h = tileHeight(t)
+        drawIsoTile(ctx, x, y, camX, camY, tileColor(t), h)
+
+        if (t === 'halfpipe') {
+          const { x: sx, y: sy } = isoToScreen(x, y, camX, camY)
+          ctx.fillStyle = palette.cream
+          ctx.fillRect(sx - 6, sy - h - 10, 12, 3)
+          if ((x + y) % 4 === 0) {
+            ctx.fillStyle = palette.red
+            ctx.font = '6px "Press Start 2P"'
+            ctx.fillText('PIPE', sx - 12, sy - h - 14)
+          }
+        }
+        if (t === 'rail') {
+          const { x: sx, y: sy } = isoToScreen(x, y, camX, camY)
+          ctx.strokeStyle = '#e8eef2'
+          ctx.lineWidth = 3
+          ctx.beginPath()
+          ctx.moveTo(sx - 18, sy - 12)
+          ctx.lineTo(sx + 18, sy - 20)
+          ctx.stroke()
+        }
+
         this.entities
           .filter((e) => e.alive && Math.round(e.gx) === x && Math.round(e.gy) === y)
           .forEach((e) => this.drawEntity(ctx, e, camX, camY))
-      }
-    }
-
-    // draw ground tiles last (grass/dirt) so they sit under roads etc? No, in iso we should draw all from back to front.
-    // Actually the above loop already draws everything. Grass/dirt were skipped; draw them too.
-    for (let y = 0; y < this.map.height; y++) {
-      for (let x = 0; x < this.map.width; x++) {
-        const t = this.map.tiles[y][x]
-        if (t !== 'grass' && t !== 'dirt') continue
-        drawIsoTile(ctx, x, y, camX, camY, tileColor(t), 0)
       }
     }
 

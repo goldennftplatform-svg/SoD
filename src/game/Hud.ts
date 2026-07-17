@@ -227,10 +227,11 @@ export class Hud {
 
       ctx.fillStyle = palette.black
       ctx.font = '16px "Rubik Mono One"'
-      ctx.fillText(m.name.toUpperCase(), x + w / 2, y + 200)
-      ctx.font = '10px "Press Start 2P"'
-      ctx.fillText(`${m.deliveries.length} deliveries`, x + w / 2, y + 220)
-      ctx.fillText(`${m.tokens.length} tokens`, x + w / 2, y + 234)
+      ctx.fillText(m.name.toUpperCase(), x + w / 2, y + 188)
+      ctx.font = '8px "Press Start 2P"'
+      ctx.fillText(m.blurb, x + w / 2, y + 206)
+      ctx.fillText(`${m.width}x${m.height}  ${m.deliveries.length} drops`, x + w / 2, y + 220)
+      ctx.fillText(`${m.halfpipes.length} halfpipes  ${m.tokens.length} tokens`, x + w / 2, y + 234)
     })
 
     ctx.font = '12px "Press Start 2P"'

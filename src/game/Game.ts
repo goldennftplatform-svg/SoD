@@ -163,15 +163,41 @@ export class Game {
         this.player.vy *= -0.5
       }
 
-      // tile effects
+      // tile effects — Skate or Die energy
       if (tile === 'ramp' && this.player.onGround) {
-        this.player.vz = 9
+        this.player.vz = 10
         this.player.onGround = false
         this.player.action = 'ollie'
         this.player.trickScore += 200
         this.player.score += 200
-        const { x, y } = isoToScreen(this.player.gx, this.player.gy, 0, 0)
-        this.particles.emitSpark(x, y - 10, 8)
+        const { x, y } = isoToScreen(this.player.gx, this.player.gy, this.camX, this.camY)
+        this.particles.emitSpark(x, y - 10, 10)
+      }
+      if (tile === 'halfpipe' && this.player.onGround) {
+        // launch hard off the pipe wall
+        this.player.vz = 14
+        this.player.onGround = false
+        this.player.action = 'ollie'
+        this.player.trickScore += 500
+        this.player.score += 500
+        this.player.energy = Math.min(this.player.maxEnergy, this.player.energy + 15)
+        const { x, y } = isoToScreen(this.player.gx, this.player.gy, this.camX, this.camY)
+        this.particles.emitSpark(x, y - 20, 18)
+        this.screenShake = 6
+      }
+      if (tile === 'rail') {
+        this.player.action = 'grind'
+        this.player.score += 2
+        this.player.energy = Math.min(this.player.maxEnergy, this.player.energy + 0.3)
+        if (this.time % 4 === 0) {
+          const { x, y } = isoToScreen(this.player.gx, this.player.gy, this.camX, this.camY)
+          this.particles.emitGrind(x, y - 8, 3)
+        }
+      }
+      if (tile === 'park') {
+        // bowl floor — slight speed buff
+        this.player.vx *= 1.02
+        this.player.vy *= 1.02
       }
       if (tile === 'water' || tile === 'hazard') {
         if (this.player.takeDamage()) {
@@ -266,7 +292,7 @@ export class Game {
       this.hud.drawMapSelect(this.ctx, this.maps, this.selectedMap)
     } else if (this.state === 'playing' || this.state === 'gameover' || this.state === 'won') {
       const { x, y } = isoToScreen(this.player.gx, this.player.gy, 0, 0)
-      this.world.draw(this.ctx, this.camX, this.camY)
+      this.world.draw(this.ctx, this.camX, this.camY, this.player.gx, this.player.gy)
       this.player.draw(this.ctx, this.camX + x, this.camY + y)
       this.particles.draw(this.ctx)
       const deliveriesLeft = this.world.entities.filter((e) => e.type === 'delivery' && e.alive).length
