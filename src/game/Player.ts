@@ -25,8 +25,8 @@ export class Player {
   score = 0
   energy = 100
   maxEnergy = 100
-  bags = 12
-  maxBags = 12
+  bags = 16
+  maxBags = 16
   cooldownShoot = 0
   cooldownDeliver = 0
 
@@ -117,6 +117,10 @@ export class Player {
     this.tokens++
     this.score += 50
     this.energy = Math.min(this.maxEnergy, this.energy + 12)
+    // Paperboy restock bundles on the route
+    if (this.tokens % 4 === 0) {
+      this.bags = Math.min(this.maxBags, this.bags + 3)
+    }
   }
 
   collectHeart() {

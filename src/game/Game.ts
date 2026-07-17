@@ -2,7 +2,7 @@ import { Player } from './Player'
 import { World } from './World'
 import { Hud } from './Hud'
 import { ParticleSystem } from './Particle'
-import { createMap, type MapDef } from './Map'
+import { createMap, isSolid, type MapDef } from './Map'
 import { isoToScreen } from './iso'
 
 export type GameState = 'title' | 'mapselect' | 'playing' | 'gameover' | 'won'
@@ -114,6 +114,26 @@ export class Game {
     this.player.score += Math.floor(points * (mult - 1))
   }
 
+  /** Footprint samples — keep the board on the street like Paperboy */
+  collidesSolid(gx: number, gy: number): boolean {
+    const pads = [
+      [0, 0],
+      [0.25, 0],
+      [-0.25, 0],
+      [0, 0.25],
+      [0, -0.25],
+      [0.2, 0.2],
+      [-0.2, 0.2],
+    ]
+    for (const [px, py] of pads) {
+      const tx = Math.floor(gx + px)
+      const ty = Math.floor(gy + py)
+      const t = this.world.tileAt(tx, ty)
+      if (isSolid(t)) return true
+    }
+    return false
+  }
+
   shootRay() {
     if (!this.player.canShoot()) return
     this.player.cooldownShoot = 18
@@ -206,22 +226,29 @@ export class Game {
       if (this.keys.has('ArrowRight') || this.keys.has('KeyD')) dx = 1
       this.player.move(dx, dy)
 
+      // Paperboy boundaries: try axis-separated moves against solid yards/buildings
+      const ox = this.player.gx
+      const oy = this.player.gy
       this.player.update()
+
+      // X axis
+      if (this.collidesSolid(this.player.gx, oy)) {
+        this.player.gx = ox
+        this.player.vx = 0
+      }
+      // Y axis
+      if (this.collidesSolid(this.player.gx, this.player.gy)) {
+        this.player.gy = oy
+        this.player.vy = 0
+      }
+
       this.world.update()
 
       // clamp to map
-      this.player.gx = Math.max(0, Math.min(this.world.map.width - 1, this.player.gx))
-      this.player.gy = Math.max(0, Math.min(this.world.map.height - 1, this.player.gy))
+      this.player.gx = Math.max(0.3, Math.min(this.world.map.width - 1.3, this.player.gx))
+      this.player.gy = Math.max(0.3, Math.min(this.world.map.height - 1.3, this.player.gy))
 
-      // building collision
       const tile = this.world.tileAt(Math.round(this.player.gx), Math.round(this.player.gy))
-      if (tile === 'building') {
-        // bounce back to previous position
-        this.player.gx -= this.player.vx * 1.5
-        this.player.gy -= this.player.vy * 1.5
-        this.player.vx *= -0.5
-        this.player.vy *= -0.5
-      }
 
       // tile effects — Skate or Die energy
       if (tile === 'ramp' && this.player.onGround) {

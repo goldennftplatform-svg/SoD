@@ -146,7 +146,7 @@ export class Hud {
     this.glass(ctx, 12, 496, 520, 32, 12, 'rgba(20,28,22,0.55)')
     ctx.fillStyle = 'rgba(255,255,255,0.85)'
     ctx.font = `500 12px ${FONT}`
-    ctx.fillText('WASD  move   Space  ollie   F  shoot   D  deliver', 28, 516)
+    ctx.fillText('Stay on the street · Space ollie · D deliver to mailboxes', 28, 516)
   }
 
   drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {

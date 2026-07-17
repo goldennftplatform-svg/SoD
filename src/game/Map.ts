@@ -1,7 +1,7 @@
 import { palette } from './brand'
 
 export type TileType =
-  | 'grass'
+  | 'grass' // yard — solid, not rideable
   | 'road'
   | 'sidewalk'
   | 'ramp'
@@ -30,30 +30,48 @@ export interface MapDef {
   tiles: TileType[][]
 }
 
+/** Paperboy rule: you ride streets/sidewalks/park features only */
+export function isRideable(t: TileType | null | undefined): boolean {
+  if (!t) return false
+  return (
+    t === 'road' ||
+    t === 'sidewalk' ||
+    t === 'ramp' ||
+    t === 'rail' ||
+    t === 'halfpipe' ||
+    t === 'park' ||
+    t === 'hazard' // can hit but still stand on
+  )
+}
+
+export function isSolid(t: TileType | null | undefined): boolean {
+  return !isRideable(t)
+}
+
 export function tileColor(t: TileType): string {
   switch (t) {
     case 'grass':
-      return palette.lightGreen
+      return '#5a9a5e'
     case 'road':
-      return '#5a5a5a'
+      return '#4a4a4a'
     case 'sidewalk':
-      return '#c8bca0'
+      return '#cfc4ae'
     case 'ramp':
       return palette.brown
     case 'halfpipe':
-      return '#3d3d3d'
+      return '#333333'
     case 'rail':
-      return '#b8c0c8'
+      return '#c5ced6'
     case 'hazard':
       return palette.gold
     case 'building':
-      return '#6f7d5e'
+      return '#6a7858'
     case 'water':
       return '#3b6d8f'
     case 'dirt':
-      return '#a88b65'
+      return '#9a7d58'
     case 'park':
-      return '#4a8f52'
+      return '#3d7a45'
     default:
       return palette.cream
   }
@@ -62,13 +80,13 @@ export function tileColor(t: TileType): string {
 export function tileHeight(t: TileType): number {
   switch (t) {
     case 'building':
-      return 36
+      return 40
     case 'halfpipe':
-      return 28
+      return 26
     case 'ramp':
-      return 14
+      return 12
     case 'rail':
-      return 10
+      return 8
     default:
       return 0
   }
@@ -77,346 +95,209 @@ export function tileHeight(t: TileType): number {
 export function createMap(id: string): MapDef {
   switch (id) {
     case 'downtown':
-      return makeDowntown()
+      return makeCityRoute('downtown', 'Downtown', '5 blocks · Hard Way', 4, 5, 0.55)
     case 'graveyard':
-      return makeGraveyard()
+      return makeCityRoute('graveyard', 'Graveyard Ramp', '5 blocks · crypt route', 3, 5, 0.4, true)
     case 'neighborhood':
     default:
-      return makeNeighborhood()
+      return makeCityRoute('neighborhood', 'Neighborhood', '5 blocks · Easy Street', 3, 5, 0.35)
   }
 }
 
-function blank(w: number, h: number, fill: TileType = 'grass'): TileType[][] {
-  return Array.from({ length: h }, () => Array.from({ length: w }, () => fill))
-}
+/**
+ * Paperboy-style city: streets between building blocks.
+ * blocksY = 5 city blocks deep (the delivery run).
+ * blocksX = how many blocks wide.
+ */
+function makeCityRoute(
+  id: string,
+  name: string,
+  blurb: string,
+  blocksX: number,
+  blocksY: number,
+  hazardDensity: number,
+  spooky = false,
+): MapDef {
+  // Scale: each city block is a chunk of houses; streets are wide enough to skate
+  const HOUSE = 10 // building footprint per block (tiles)
+  const STREET = 6 // street width (lanes) — Paperboy road scale
+  const YARD = 2 // front yard depth (solid grass) between sidewalk and building
 
-function roadH(tiles: TileType[][], y: number, x0: number, x1: number) {
-  for (let x = x0; x <= x1; x++) {
-    tiles[y][x] = 'road'
-    if (y + 1 < tiles.length) tiles[y + 1][x] = 'road'
-  }
-}
+  const w = blocksX * HOUSE + (blocksX + 1) * STREET
+  const h = blocksY * HOUSE + (blocksY + 1) * STREET
 
-function roadV(tiles: TileType[][], x: number, y0: number, y1: number) {
-  for (let y = y0; y <= y1; y++) {
-    tiles[y][x] = 'road'
-    if (x + 1 < tiles[0].length) tiles[y][x + 1] = 'road'
-  }
-}
+  const fill: TileType = spooky ? 'dirt' : 'grass'
+  const tiles: TileType[][] = Array.from({ length: h }, () => Array.from({ length: w }, () => fill))
 
-function sidewalkAroundRoad(tiles: TileType[][]) {
-  const h = tiles.length
-  const w = tiles[0].length
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      if (tiles[y][x] !== 'grass' && tiles[y][x] !== 'dirt' && tiles[y][x] !== 'park') continue
-      const nearRoad =
-        tiles[y - 1][x] === 'road' ||
-        tiles[y + 1][x] === 'road' ||
-        tiles[y][x - 1] === 'road' ||
-        tiles[y][x + 1] === 'road'
-      if (nearRoad) tiles[y][x] = 'sidewalk'
+  // Paint all streets (horizontal + vertical grid)
+  for (let by = 0; by <= blocksY; by++) {
+    const y0 = by * (HOUSE + STREET)
+    for (let y = y0; y < y0 + STREET && y < h; y++) {
+      for (let x = 0; x < w; x++) tiles[y][x] = 'road'
     }
   }
-}
+  for (let bx = 0; bx <= blocksX; bx++) {
+    const x0 = bx * (HOUSE + STREET)
+    for (let x = x0; x < x0 + STREET && x < w; x++) {
+      for (let y = 0; y < h; y++) tiles[y][x] = 'road'
+    }
+  }
 
-function blockBuildings(tiles: TileType[][], x0: number, y0: number, bw: number, bh: number) {
-  for (let y = y0; y < y0 + bh; y++) {
-    for (let x = x0; x < x0 + bw; x++) {
-      if (tiles[y]?.[x] === 'grass' || tiles[y]?.[x] === 'sidewalk' || tiles[y]?.[x] === 'dirt') {
-        tiles[y][x] = 'building'
+  // Building blocks with yards + sidewalks facing the street (Paperboy houses)
+  const deliveries: { x: number; y: number }[] = []
+  const ramps: { x: number; y: number }[] = []
+  const hazards: { x: number; y: number }[] = []
+
+  for (let by = 0; by < blocksY; by++) {
+    for (let bx = 0; bx < blocksX; bx++) {
+      const ox = STREET + bx * (HOUSE + STREET)
+      const oy = STREET + by * (HOUSE + STREET)
+
+      // Fill block as yard first
+      for (let y = oy; y < oy + HOUSE; y++) {
+        for (let x = ox; x < ox + HOUSE; x++) {
+          tiles[y][x] = spooky ? 'dirt' : 'grass'
+        }
+      }
+
+      // Inner building mass (houses) — leave yard ring
+      for (let y = oy + YARD; y < oy + HOUSE - YARD; y++) {
+        for (let x = ox + YARD; x < ox + HOUSE - YARD; x++) {
+          tiles[y][x] = 'building'
+        }
+      }
+
+      // Sidewalks on the street-facing edges of each block
+      for (let x = ox; x < ox + HOUSE; x++) {
+        // north & south edges of block (face horizontal streets)
+        if (oy - 1 >= 0 && tiles[oy - 1][x] === 'road') {
+          // sidewalk is the first yard row
+          tiles[oy][x] = 'sidewalk'
+        }
+        if (oy + HOUSE < h && tiles[oy + HOUSE][x] === 'road') {
+          tiles[oy + HOUSE - 1][x] = 'sidewalk'
+        }
+      }
+      for (let y = oy; y < oy + HOUSE; y++) {
+        if (ox - 1 >= 0 && tiles[y][ox - 1] === 'road') {
+          tiles[y][ox] = 'sidewalk'
+        }
+        if (ox + HOUSE < w && tiles[y][ox + HOUSE] === 'road') {
+          tiles[y][ox + HOUSE - 1] = 'sidewalk'
+        }
+      }
+
+      // Subscriber mailboxes along sidewalks (Paperboy deliveries) — every other house slot
+      for (let i = 1; i < HOUSE - 1; i += 2) {
+        // south-facing sidewalk of block (top of next street)
+        const sx = ox + i
+        const sy = oy + HOUSE - 1
+        if (tiles[sy]?.[sx] === 'sidewalk') {
+          deliveries.push({ x: sx, y: sy })
+        }
+        // north-facing
+        const ny = oy
+        if (tiles[ny]?.[sx] === 'sidewalk' && i % 4 === 1) {
+          deliveries.push({ x: sx, y: ny })
+        }
       }
     }
   }
+
+  // Main Paperboy run: the center vertical street gets the halfpipe training course at the end
+  const mainStreetX = Math.floor(STREET / 2) + Math.floor(blocksX / 2) * (HOUSE + STREET)
+  const start = { x: mainStreetX, y: Math.floor(STREET / 2) }
+  const goal = { x: mainStreetX, y: h - Math.floor(STREET / 2) - 1 }
+
+  // Halfpipe / training course at end of route (classic Paperboy bonus stage vibe)
+  const pipeY = h - STREET - 8
+  const pipeX = Math.max(2, mainStreetX - 4)
+  paintHalfpipe(tiles, pipeX, pipeY, 10, 7)
+  const halfpipes = [
+    { x: pipeX + 2, y: pipeY + 2 },
+    { x: pipeX + 5, y: pipeY + 3 },
+  ]
+
+  // Ramps at each block intersection (skate flavor on the paper route)
+  for (let by = 0; by < blocksY; by++) {
+    for (let bx = 0; bx <= blocksX; bx++) {
+      const ix = bx * (HOUSE + STREET) + Math.floor(STREET / 2)
+      const iy = STREET + by * (HOUSE + STREET) + Math.floor(HOUSE / 2)
+      if (tiles[iy]?.[ix] === 'road') {
+        tiles[iy][ix] = 'ramp'
+        ramps.push({ x: ix, y: iy })
+      }
+    }
+  }
+
+  // Grind rails along long stretches of the main street curb
+  for (let y = STREET; y < h - STREET; y++) {
+    if (y % 7 === 0) {
+      const rx = mainStreetX - 2
+      if (tiles[y]?.[rx] === 'road') tiles[y][rx] = 'rail'
+    }
+  }
+
+  // Hazards on the road (cars / breaks) — Paperboy obstacles
+  for (let y = STREET + 2; y < h - STREET - 2; y += 5) {
+    for (let bx = 0; bx <= blocksX; bx++) {
+      if (Math.random() > hazardDensity) continue
+      const hx = bx * (HOUSE + STREET) + 1 + Math.floor(Math.random() * (STREET - 2))
+      if (tiles[y]?.[hx] === 'road') {
+        tiles[y][hx] = 'hazard'
+        hazards.push({ x: hx, y })
+      }
+    }
+  }
+
+  // Tokens on the road (papers bundles / coins)
+  const tokens: { x: number; y: number }[] = []
+  const hearts: { x: number; y: number }[] = []
+  for (let y = 2; y < h - 2; y++) {
+    for (let x = 0; x < w; x++) {
+      if (tiles[y][x] !== 'road' && tiles[y][x] !== 'sidewalk') continue
+      if ((x + y * 3) % 11 === 0) tokens.push({ x, y })
+      if ((x + y) % 53 === 0) hearts.push({ x, y })
+    }
+  }
+
+  // Restock bags mid-route (extra delivery pickups as tokens already cover score)
+
+  return {
+    id,
+    name,
+    blurb: `${blurb} · ${w}×${h}`,
+    width: w,
+    height: h,
+    start,
+    goal,
+    deliveries: deliveries.slice(0, spooky ? 28 : 36),
+    tokens: tokens.slice(0, 80),
+    hearts: hearts.slice(0, 6),
+    ramps,
+    halfpipes,
+    hazards,
+    tiles,
+  }
 }
 
-function paintHalfpipe(tiles: TileType[][], cx: number, cy: number) {
-  // U-shaped halfpipe bowl ~8x6
-  for (let y = cy; y < cy + 6; y++) {
-    for (let x = cx; x < cx + 8; x++) {
-      if (!tiles[y]?.[x]) continue
-      const edge = x === cx || x === cx + 7 || y === cy || y === cy + 5
+function paintHalfpipe(tiles: TileType[][], cx: number, cy: number, pw: number, ph: number) {
+  for (let y = cy; y < cy + ph && y < tiles.length; y++) {
+    for (let x = cx; x < cx + pw && x < tiles[0].length; x++) {
+      const edge = x === cx || x === cx + pw - 1 || y === cy || y === cy + ph - 1
       tiles[y][x] = edge ? 'halfpipe' : 'park'
     }
   }
-  // transition ramps into the pipe
-  tiles[cy + 2][cx - 1] = 'ramp'
-  tiles[cy + 3][cx - 1] = 'ramp'
-  tiles[cy + 2][cx + 8] = 'ramp'
-  tiles[cy + 3][cx + 8] = 'ramp'
-  // grind rail across the lip
-  for (let x = cx + 1; x < cx + 7; x++) {
-    tiles[cy][x] = 'rail'
-    tiles[cy + 5][x] = 'rail'
+  // entrance ramps from the street
+  if (tiles[cy + Math.floor(ph / 2)]?.[cx - 1] === 'road') {
+    tiles[cy + Math.floor(ph / 2)][cx - 1] = 'ramp'
   }
-}
-
-function scatter(
-  count: number,
-  w: number,
-  h: number,
-  avoid: Set<string>,
-  prefer?: (x: number, y: number) => boolean,
-): { x: number; y: number }[] {
-  const out: { x: number; y: number }[] = []
-  let tries = 0
-  while (out.length < count && tries < count * 40) {
-    tries++
-    const x = 2 + Math.floor(Math.random() * (w - 4))
-    const y = 2 + Math.floor(Math.random() * (h - 4))
-    const key = `${x},${y}`
-    if (avoid.has(key)) continue
-    if (prefer && !prefer(x, y)) continue
-    avoid.add(key)
-    out.push({ x, y })
+  if (tiles[cy + Math.floor(ph / 2)]?.[cx + pw] === 'road') {
+    tiles[cy + Math.floor(ph / 2)][cx + pw] = 'ramp'
   }
-  return out
-}
-
-function makeNeighborhood(): MapDef {
-  const w = 48
-  const h = 48
-  const tiles = blank(w, h, 'grass')
-
-  // big street grid
-  for (let i = 0; i < 5; i++) {
-    roadH(tiles, 4 + i * 9, 2, w - 3)
-    roadV(tiles, 4 + i * 9, 2, h - 3)
-  }
-  sidewalkAroundRoad(tiles)
-
-  // housing blocks
-  for (let by = 7; by < h - 8; by += 9) {
-    for (let bx = 7; bx < w - 8; bx += 9) {
-      blockBuildings(tiles, bx, by, 3, 3)
-    }
-  }
-
-  // SKATE PARK / HALF PIPE — centerpiece
-  paintHalfpipe(tiles, 20, 20)
-  // extra mini ramps around town
-  const rampSpots = [
-    { x: 10, y: 10 },
-    { x: 34, y: 12 },
-    { x: 12, y: 34 },
-    { x: 36, y: 36 },
-    { x: 28, y: 8 },
-    { x: 8, y: 28 },
-  ]
-  rampSpots.forEach((r) => {
-    tiles[r.y][r.x] = 'ramp'
-    tiles[r.y][r.x + 1] = 'ramp'
-  })
-
-  // alley rails
-  for (let x = 14; x < 20; x++) tiles[15][x] = 'rail'
-  for (let y = 30; y < 36; y++) tiles[y][32] = 'rail'
-
-  const avoid = new Set<string>()
-  ;[
-    [3, 3],
-    [44, 44],
-    [20, 20],
-  ].forEach(([x, y]) => avoid.add(`${x},${y}`))
-
-  const deliveries = [
-    { x: 6, y: 3 },
-    { x: 15, y: 3 },
-    { x: 24, y: 3 },
-    { x: 33, y: 3 },
-    { x: 42, y: 6 },
-    { x: 3, y: 12 },
-    { x: 3, y: 21 },
-    { x: 3, y: 30 },
-    { x: 3, y: 39 },
-    { x: 12, y: 44 },
-    { x: 21, y: 44 },
-    { x: 30, y: 44 },
-    { x: 39, y: 44 },
-    { x: 44, y: 18 },
-    { x: 44, y: 27 },
-    { x: 44, y: 36 },
-    { x: 18, y: 18 },
-    { x: 27, y: 27 },
-  ]
-  deliveries.forEach((d) => avoid.add(`${d.x},${d.y}`))
-
-  const tokens = scatter(40, w, h, avoid, (x, y) => {
-    const t = tiles[y][x]
-    return t === 'road' || t === 'sidewalk' || t === 'park' || t === 'rail' || t === 'ramp'
-  })
-  const hearts = scatter(4, w, h, avoid)
-  const hazards = [
-    { x: 9, y: 5 },
-    { x: 18, y: 14 },
-    { x: 27, y: 5 },
-    { x: 36, y: 23 },
-    { x: 14, y: 32 },
-    { x: 41, y: 14 },
-    { x: 23, y: 41 },
-    { x: 32, y: 32 },
-    { x: 8, y: 23 },
-    { x: 40, y: 40 },
-  ]
-
-  return {
-    id: 'neighborhood',
-    name: 'Neighborhood',
-    blurb: '48x48 streets + halfpipe park',
-    width: w,
-    height: h,
-    start: { x: 3, y: 3 },
-    goal: { x: 44, y: 44 },
-    deliveries,
-    tokens,
-    hearts,
-    ramps: rampSpots,
-    halfpipes: [
-      { x: 20, y: 20 },
-      { x: 24, y: 22 },
-      { x: 27, y: 24 },
-    ],
-    hazards,
-    tiles,
-  }
-}
-
-function makeDowntown(): MapDef {
-  const w = 56
-  const h = 56
-  const tiles = blank(w, h, 'sidewalk')
-
-  for (let y = 2; y < h - 2; y++) {
-    for (let x = 2; x < w - 2; x++) {
-      tiles[y][x] = 'road'
-    }
-  }
-  // dense building blocks
-  for (let by = 5; by < h - 8; by += 8) {
-    for (let bx = 5; bx < w - 8; bx += 8) {
-      blockBuildings(tiles, bx, by, 4, 4)
-    }
-  }
-  // arterial roads keep clear
-  for (let i = 0; i < 4; i++) {
-    roadH(tiles, 8 + i * 12, 2, w - 3)
-    roadV(tiles, 8 + i * 12, 2, h - 3)
-  }
-
-  // mega halfpipe plaza
-  paintHalfpipe(tiles, 24, 24)
-  paintHalfpipe(tiles, 38, 10)
-
-  const rampSpots = [
-    { x: 12, y: 12 },
-    { x: 20, y: 20 },
-    { x: 40, y: 40 },
-    { x: 16, y: 40 },
-    { x: 40, y: 16 },
-    { x: 30, y: 8 },
-    { x: 8, y: 30 },
-  ]
-  rampSpots.forEach((r) => {
-    tiles[r.y][r.x] = 'ramp'
-  })
-
-  // long grind lines
-  for (let x = 10; x < 22; x++) tiles[18][x] = 'rail'
-  for (let y = 30; y < 45; y++) tiles[y][28] = 'rail'
-
-  const avoid = new Set<string>(['3,3', '52,52'])
-  const deliveries = scatter(24, w, h, avoid, (x, y) => tiles[y][x] === 'sidewalk' || tiles[y][x] === 'road')
-  const tokens = scatter(55, w, h, avoid, (x, y) => tiles[y][x] !== 'building' && tiles[y][x] !== 'water')
-  const hearts = scatter(5, w, h, avoid)
-  const hazards = scatter(16, w, h, avoid, (x, y) => tiles[y][x] === 'road')
-
-  return {
-    id: 'downtown',
-    name: 'Downtown',
-    blurb: '56x56 mega grid, twin halfpipes',
-    width: w,
-    height: h,
-    start: { x: 3, y: 3 },
-    goal: { x: 52, y: 52 },
-    deliveries,
-    tokens,
-    hearts,
-    ramps: rampSpots,
-    halfpipes: [
-      { x: 24, y: 24 },
-      { x: 38, y: 10 },
-    ],
-    hazards,
-    tiles,
-  }
-}
-
-function makeGraveyard(): MapDef {
-  const w = 52
-  const h = 52
-  const tiles = blank(w, h, 'dirt')
-
-  // winding cemetery roads
-  roadH(tiles, 8, 2, 48)
-  roadH(tiles, 24, 2, 48)
-  roadH(tiles, 40, 2, 48)
-  roadV(tiles, 8, 2, 48)
-  roadV(tiles, 26, 2, 48)
-  roadV(tiles, 42, 2, 48)
-  sidewalkAroundRoad(tiles)
-
-  // tombstone building clumps
-  for (let i = 0; i < 12; i++) {
-    const bx = 4 + (i % 4) * 12
-    const by = 4 + Math.floor(i / 4) * 14
-    blockBuildings(tiles, bx + 2, by + 2, 2, 2)
-  }
-
-  // water crypt
-  for (let y = 18; y < 24; y++) {
-    for (let x = 18; x < 24; x++) tiles[y][x] = 'water'
-  }
-
-  // GRAVEYARD HALFPIPE under the bridge vibe
-  paintHalfpipe(tiles, 30, 28)
-  // second bowl
-  paintHalfpipe(tiles, 10, 32)
-
-  const rampSpots = [
-    { x: 12, y: 10 },
-    { x: 36, y: 12 },
-    { x: 20, y: 36 },
-    { x: 44, y: 44 },
-    { x: 6, y: 44 },
-  ]
-  rampSpots.forEach((r) => {
-    tiles[r.y][r.x] = 'ramp'
-    if (tiles[r.y][r.x + 1]) tiles[r.y][r.x + 1] = 'ramp'
-  })
-
-  const avoid = new Set<string>(['4,8', '46,46'])
-  const deliveries = scatter(16, w, h, avoid, (x, y) => tiles[y][x] === 'sidewalk' || tiles[y][x] === 'road')
-  const tokens = scatter(45, w, h, avoid, (x, y) => tiles[y][x] !== 'building' && tiles[y][x] !== 'water')
-  const hearts = scatter(4, w, h, avoid)
-  const hazards = scatter(14, w, h, avoid)
-
-  return {
-    id: 'graveyard',
-    name: 'Graveyard Ramp',
-    blurb: '52x52 crypt roads + twin bowls',
-    width: w,
-    height: h,
-    start: { x: 4, y: 8 },
-    goal: { x: 46, y: 46 },
-    deliveries,
-    tokens,
-    hearts,
-    ramps: rampSpots,
-    halfpipes: [
-      { x: 30, y: 28 },
-      { x: 10, y: 32 },
-    ],
-    hazards,
-    tiles,
+  // lip rails
+  for (let x = cx + 1; x < cx + pw - 1; x++) {
+    if (tiles[cy]?.[x]) tiles[cy][x] = 'rail'
+    if (tiles[cy + ph - 1]?.[x]) tiles[cy + ph - 1][x] = 'rail'
   }
 }
