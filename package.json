@@ -1,0 +1,15 @@
+{
+  "name": "skull-or-die",
+  "version": "0.1.0",
+  "description": "8-bit punk arcade: Skate or Die meets Paperboy",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
+  }
+}
